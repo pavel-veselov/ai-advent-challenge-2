@@ -1,10 +1,15 @@
-﻿"""FastAPI-приложение «День 3 — Разные способы рассуждения».
+﻿"""FastAPI-приложение «AI Advent — День 3 и День 4».
 
 Эндпоинты:
-  GET  /           → static/index.html
-  GET  /api/tasks  → встроенные задачи
-  POST /api/solve  → решить задачу четырьмя способами
-  POST /api/judge  → оценить решения судьёй (LLM-as-a-judge)
+  GET  /                      → static/index.html
+  GET  /api/tasks             → встроенные задачи
+  GET  /api/models            → список моделей для селекта
+  GET  /api/progress          → прогресс решения (для индикации)
+  POST /api/solve             → решить задачу четырьмя способами (День 3)
+  POST /api/judge             → оценить решения судьёй (LLM-as-a-judge)
+  GET  /api/temperature-progress → прогресс матрицы 4×3 вызовов (День 4)
+  POST /api/temp-matrix          → 4 типа задач при t=0/0.7/1.2 параллельно
+                                   + LLM-вывод по эксперименту (День 4)
 """
 from __future__ import annotations
 
@@ -27,19 +32,32 @@ from config import settings
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-app = FastAPI(title="День 3 — Разные способы рассуждения")
+app = FastAPI(title="AI Advent — День 3 и День 4")
 
 # Четыре метода (используются судьёй; решаются параллельно, а отображаются
 # в этом порядке).
 ALL_METHODS = ["direct", "step_by_step", "self_prompt", "experts"]
 
 # Модели, доступные в селекте фронтенда (белый список для solve/judge).
-AVAILABLE_MODELS = ["glm-5.3-flash", "qwen3.8-27b", "deepseek-v4-flash"]
+# qwen3.8-27b временно исключена: нестабильно отвечает на бэкенде.
+AVAILABLE_MODELS = ["glm-5.3-flash", "deepseek-v4-flash"]
+
+# Температуры эксперимента Дня 4: матрица «тип задачи × температура».
+TEMPERATURES = [0.0, 0.7, 1.2]
 
 # Прогресс последнего запуска /api/solve (для индикации на фронтенде).
 # Способы решаются параллельно, поэтому статусы: running — решается сейчас
 # (может быть несколько), done — готово.
 SOLVE_PROGRESS: dict = {"running": [], "done": [], "total": 4}
+# Прогресс последнего запуска /api/temp-matrix (День 4): 4 типа задач ×
+# 3 температуры = 12 параллельных вызовов, статусы те же, что у способов
+# в /api/solve. Идентификатор ячейки — «<тип>:<температура>», например
+# "technical:0.7".
+TEMP_PROGRESS: dict = {
+    "running": [],
+    "done": [],
+    "total": len(T.TEMP_TASKS) * len(TEMPERATURES),
+}
 # Защита от потерянных обновлений при одновременном завершении способов.
 PROGRESS_LOCK = threading.Lock()
 # Критерии качества, по которым судья оценивает каждое решение (0-10).
@@ -70,13 +88,21 @@ class JudgeReq(BaseModel):
     solutions: list[dict]
 
 
+class TempMatrixReq(BaseModel):
+    queries: dict[str, str] = {}  # {"technical": "...", ...} — пустые значения заменяются дефолтными из T.TEMP_TASKS
+    model: str | None = None
+
+
 # --------------------------------------------------------------------------
 # Вспомогательные функции
 # --------------------------------------------------------------------------
-def run_chat(messages, temperature, max_tokens=None, model=None):
-    """Обёртка над llm.chat с человеческой обработкой ошибок сети/LLM."""
+def run_chat(messages, temperature, max_tokens=None, model=None, **opts):
+    """Обёртка над llm.chat с человеческой обработкой ошибок сети/LLM.
+
+    Дополнительные opts (timeout, thinking) пробрасываются в llm.chat.
+    """
     try:
-        return llm.chat(messages, temperature=temperature, max_tokens=max_tokens, model=model)
+        return llm.chat(messages, temperature=temperature, max_tokens=max_tokens, model=model, **opts)
     except Exception as exc:  # noqa: BLE001 — перехватываем сеть/API
         raise HTTPException(
             status_code=502,
@@ -373,6 +399,44 @@ def run_judge(task_text: str, solutions: list[dict], model=None) -> dict:
 
 
 # --------------------------------------------------------------------------
+# День 4: эксперимент с температурой
+# --------------------------------------------------------------------------
+def run_temp_matrix_analyze(
+    queries: dict[str, str], results: dict[str, dict], model=None
+) -> tuple[str, str]:
+    """Сравнение матрицы 4×3 (тип задачи × температура) силами LLM.
+
+    Анализ всегда temperature 0 и без лимита токенов: выводы должны быть
+    детерминированными и не обрезаться. Возвращает кортеж (текст анализа,
+    промпт отправленного запроса — для UI).
+    """
+    blocks = []
+    for key, task in T.TEMP_TASKS.items():
+        lines = [f"--- {task['label']} задача ---", f"Задание: {queries[key]}"]
+        for t in TEMPERATURES:
+            ans = results.get(key, {}).get(t, {})
+            content = (ans.get("content") or "").strip() or "(пустой ответ)"
+            lines.append(f"[temperature = {t}]\n{content}")
+        blocks.append("\n".join(lines))
+    matrix_text = "\n\n".join(blocks)
+
+    messages = [
+        {"role": "system", "content": T.TEMPERATURE_ANALYZE_SYSTEM},
+        {
+            "role": "user",
+            "content": (
+                f"Матрица результатов (4 типа задач × температуры 0/0.7/1.2):\n\n"
+                f"{matrix_text}\n\n"
+                "Сравни ответы и сформулируй вывод: для каких типов задач "
+                "какая температура подходит."
+            ),
+        },
+    ]
+    result = run_chat(messages, JUDGE_TEMPERATURE, None, model=model)
+    return result["content"], format_messages(messages)
+
+
+# --------------------------------------------------------------------------
 # Эндпоинты
 # --------------------------------------------------------------------------
 @app.get("/")
@@ -408,6 +472,17 @@ def api_progress():
         "done": SOLVE_PROGRESS["done"],
         "running": SOLVE_PROGRESS["running"],
         "total": SOLVE_PROGRESS["total"],
+    }
+
+
+@app.get("/api/temperature-progress")
+def api_temperature_progress():
+    # Статусы трёх температурных вызовов текущего запуска Дня 4 (опрос
+    # фронтендом): done — ответ получен, running — выполняется сейчас.
+    return {
+        "done": TEMP_PROGRESS["done"],
+        "running": TEMP_PROGRESS["running"],
+        "total": TEMP_PROGRESS["total"],
     }
 
 
@@ -476,6 +551,73 @@ def api_judge(req: JudgeReq):
 
     verdict = run_judge(task_text, req.solutions, validated_model(req.model))
     return verdict
+
+
+# Ограничения ячейки матрицы: потолок на время генерации. Reasoning-фаза
+# GLM идёт отдельным (невидимым) каналом и ест токены и время — без лимита
+# на t=1.2 она разгоняется и упирается в таймаут клиента (90 с). Выключить
+# её нельзя: chat_template_kwargs enable_thinking=False на этом шлюзе не
+# работает и к тому же заставляет шаблон печатать рассуждения прямо в
+# контент. Вместо этого reasoning сдерживается системным промптом
+# T.TEMP_CELL_SYSTEM, а 6000 токенов (~60 с генерации в худшем случае)
+# страхуют от убегающей генерации.
+TEMP_CELL_MAX_TOKENS = 6000
+TEMP_CELL_TIMEOUT = 180.0
+
+
+@app.post("/api/temp-matrix")
+def api_temp_matrix(req: TempMatrixReq):
+    """День 4: матрица «4 типа задач × temperature 0 / 0.7 / 1.2».
+
+    12 вызовов выполняются параллельно (ThreadPoolExecutor, как способы
+    в /api/solve): общее время = самый медленный вызов. Ячейки идут с
+    системным промптом T.TEMP_CELL_SYSTEM, лимитом TEMP_CELL_MAX_TOKENS
+    токенов и таймаутом TEMP_CELL_TIMEOUT с — чтобы матрица собиралась
+    за десятки секунд. Когда все ответы собраны, аналитик (temperature 0)
+    формулирует вывод: для каких типов задач какая температура подходит.
+    """
+    queries: dict[str, str] = {}
+    for key, task in T.TEMP_TASKS.items():
+        custom = (req.queries.get(key) or "").strip()
+        queries[key] = custom or task["text"]
+    model = validated_model(req.model)
+
+    with PROGRESS_LOCK:
+        TEMP_PROGRESS["done"] = []
+        TEMP_PROGRESS["running"] = []
+        TEMP_PROGRESS["total"] = len(T.TEMP_TASKS) * len(TEMPERATURES)
+
+    def _run_cell(key: str, t: float) -> dict:
+        """Одна ячейка матрицы (задача + температура) в отдельном потоке."""
+        cell = f"{key}:{t}"
+        with PROGRESS_LOCK:
+            TEMP_PROGRESS["running"] = list(TEMP_PROGRESS["running"]) + [cell]
+        messages = [
+            {"role": "system", "content": T.TEMP_CELL_SYSTEM},
+            {"role": "user", "content": queries[key]},
+        ]
+        res = run_chat(messages, t, TEMP_CELL_MAX_TOKENS, model, timeout=TEMP_CELL_TIMEOUT)
+        with PROGRESS_LOCK:
+            TEMP_PROGRESS["running"] = [x for x in TEMP_PROGRESS["running"] if x != cell]
+            TEMP_PROGRESS["done"] = list(TEMP_PROGRESS["done"]) + [cell]
+        return {
+            "temperature": t,
+            "content": res["content"],
+            "finish_reason": res["finish_reason"],
+            "completion_tokens": res["completion_tokens"],
+            "elapsed_ms": res["elapsed_ms"],
+        }
+
+    cells = [(key, t) for key in T.TEMP_TASKS for t in TEMPERATURES]
+    with ThreadPoolExecutor(max_workers=len(cells)) as pool:
+        futures = [pool.submit(_run_cell, key, t) for key, t in cells]
+        # Собираем в порядке клеток — сгруппированный вид для фронтенда.
+        results: dict[str, dict] = {}
+        for (key, t), future in zip(cells, futures):
+            results.setdefault(key, {})[t] = future.result()
+
+    analysis, prompt = run_temp_matrix_analyze(queries, results, model)
+    return {"results": results, "analysis": analysis, "prompt": prompt}
 
 
 # Монтируем статику: всё, что не попавшее в роуты, из static/.

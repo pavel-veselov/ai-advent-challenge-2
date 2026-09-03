@@ -3,78 +3,165 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>День 3 — Разные способы рассуждения</title>
+  <title>AI Advent — День 3 и День 4</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="layout">
     <!-- ===== Сайдбар ===== -->
     <aside class="sidebar">
-      <h1 class="title">День 3</h1>
-      <p class="subtitle">Разные способы рассуждения</p>
+      <nav class="tabs" aria-label="Дни">
+        <button id="tabDay3" class="tab active" type="button">День 3</button>
+        <button id="tabDay4" class="tab" type="button">День 4</button>
+      </nav>
 
-      <section class="panel">
-        <label class="field-label" for="taskSelect">Задача</label>
-        <select id="taskSelect" class="select"></select>
-      </section>
+      <h1 class="title" id="pageTitle">День 3</h1>
+      <p class="subtitle" id="pageSubtitle">Разные способы рассуждения</p>
 
-      <section class="panel" id="customPanel" hidden>
-        <label class="field-label" for="customText">Своя задача</label>
-        <textarea id="customText" class="textarea"
-          placeholder="Вставьте текст своей задачи..."></textarea>
-      </section>
-
+      <!-- Общая панель: выбор модели работает для обеих вкладок -->
       <section class="panel">
         <label class="field-label" for="modelSelect">Модель</label>
         <select id="modelSelect" class="select"></select>
-
-        <label class="field-label" for="temperature">Temperature: <span id="tempVal">0.5</span></label>
-        <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.5" />
-        <div class="temp-scale"><span>0</span><span>1</span></div>
-
-        <label class="field-label" for="maxTokens">Лимит токенов: <span id="tokensVal">2000</span></label>
-        <input type="range" id="maxTokens" min="1" max="10000" step="100" value="2000" />
-        <div class="temp-scale"><span>1</span><span>10000</span></div>
       </section>
 
-      <div class="actions">
-        <button id="solveBtn" class="btn primary">Решить 4 способами</button>
+      <!-- ===== Вкладка День 3 ===== -->
+      <div id="pageDay3">
+        <section class="panel">
+          <label class="field-label" for="taskSelect">Задача</label>
+          <select id="taskSelect" class="select"></select>
+        </section>
+
+        <section class="panel" id="customPanel" hidden>
+          <label class="field-label" for="customText">Своя задача</label>
+          <textarea id="customText" class="textarea"
+            placeholder="Вставьте текст своей задачи..."></textarea>
+        </section>
+
+        <section class="panel">
+          <label class="field-label" for="temperature">Temperature: <span id="tempVal">0.5</span></label>
+          <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.5" />
+          <div class="temp-scale"><span>0</span><span>1</span></div>
+
+          <label class="field-label" for="maxTokens">Лимит токенов: <span id="tokensVal">2000</span></label>
+          <input type="range" id="maxTokens" min="1" max="10000" step="100" value="2000" />
+          <div class="temp-scale"><span>1</span><span>10000</span></div>
+        </section>
+
+        <div class="actions">
+          <button id="solveBtn" class="btn primary">Решить 4 способами</button>
+        </div>
+
+        <div id="errorBox" class="error-box" hidden></div>
       </div>
 
-      <div id="errorBox" class="error-box" hidden></div>
+      <!-- ===== Вкладка День 4 ===== -->
+      <div id="pageDay4" hidden>
+        <section class="panel">
+          <label class="field-label">Задания: 4 типа × 3 температуры = 12 вызовов</label>
+          <div class="temp-tasks">
+            <div class="temp-task">
+              <label class="field-label" for="tempQueryTechnical">Техническая</label>
+              <textarea id="tempQueryTechnical" class="textarea" rows="4"
+                placeholder="Точность важнее новизны">Придумай 10 краевых случаев для функции apply_discount(cart, promo_code), которая применяет промокод к корзине интернет-магазина. Запрещены очевидные случаи: «пустая корзина», «неверный промокод», «истёкший промокод». К каждому — однострочное описание ожидаемого результата.</textarea>
+            </div>
+            <div class="temp-task">
+              <label class="field-label" for="tempQueryCreative">Творческая</label>
+              <textarea id="tempQueryCreative" class="textarea" rows="4"
+                placeholder="Здесь температура раскрывается">Придумай 5 названий для панк-группы, которая играет колыбельные. Запрещены банальные названия: «Тихий рок», «Спокойный шум», «Ночная колыбельная». К каждому — однострочное обоснование.</textarea>
+            </div>
+            <div class="temp-task">
+              <label class="field-label" for="tempQueryLogical">Логическая</label>
+              <textarea id="tempQueryLogical" class="textarea" rows="4"
+                placeholder="Один точный ответ">На столе горело семь свечей. Три задули. Сколько свечей будет на столе через час? Дай ответ и однострочное объяснение.</textarea>
+            </div>
+            <div class="temp-task">
+              <label class="field-label" for="tempQueryAnalytical">Аналитическая</label>
+              <textarea id="tempQueryAnalytical" class="textarea" rows="4"
+                placeholder="Данные + обоснование">Поддержка получила за неделю 40 жалоб: 25 — о медленной доставке, 10 — о битых товарах, 5 — о неудобном сайте. Бюджета хватает на улучшение только одного направления. Выбери его и обоснуй в 2–3 предложениях.</textarea>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <button id="tempRunBtn" class="btn primary">Выполнить</button>
+        </div>
+
+        <div id="tempErrorBox" class="error-box" hidden></div>
+      </div>
     </aside>
 
     <!-- ===== Основная область ===== -->
     <main class="main">
-      <div class="intro">
-        <p>
-          Ответ модели — функция от контекста. Один и тот же вопрос при разном
-          управлении рассуждением даёт разную цену и разное качество — выбор
-          стратегии такое же инженерное решение, как выбор алгоритма.
-        </p>
-      </div>
-
-      <section id="taskPanel" class="task-panel" hidden>
-        <div class="task-panel-head">
-          <h2 id="taskHeading" class="task-heading"></h2>
+      <!-- ===== Основная область Дня 3 ===== -->
+      <div id="mainDay3">
+        <div class="intro">
+          <p>
+            Ответ модели — функция от контекста. Один и тот же вопрос при разном
+            управлении рассуждением даёт разную цену и разное качество — выбор
+            стратегии такое же инженерное решение, как выбор алгоритма.
+          </p>
         </div>
-        <p id="taskText" class="task-text"></p>
-      </section>
 
-      <div id="grid" class="grid">
-        <!-- 2x2 карточки решений -->
+        <section id="taskPanel" class="task-panel" hidden>
+          <div class="task-panel-head">
+            <h2 id="taskHeading" class="task-heading"></h2>
+          </div>
+          <p id="taskText" class="task-text"></p>
+        </section>
+
+        <div id="grid" class="grid">
+          <!-- 2x2 карточки решений -->
+        </div>
+
+        <section id="judgeSection" class="judge" hidden>
+          <header class="judge-head">
+            <h2>Вердикт судьи (LLM-as-a-judge)</h2>
+            <button id="judgePromptBtn" class="hint-btn prompt-btn" title="Промпт, отправленный судье">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </button>
+            <button class="hint-btn" data-hint="judge">?</button>
+          </header>
+          <div class="judge-body" id="judgeBody"></div>
+        </section>
       </div>
 
-      <section id="judgeSection" class="judge" hidden>
-        <header class="judge-head">
-          <h2>Вердикт судьи (LLM-as-a-judge)</h2>
-          <button id="judgePromptBtn" class="hint-btn prompt-btn" title="Промпт, отправленный судье">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-          </button>
-          <button class="hint-btn" data-hint="judge">?</button>
-        </header>
-        <div class="judge-body" id="judgeBody"></div>
-      </section>
+      <!-- ===== Основная область Дня 4 ===== -->
+      <div id="mainDay4" hidden>
+        <div class="intro">
+          <p>
+            Temperature управляет случайностью сэмплирования: чем она выше, тем
+            сильнее модель «разбрасывает» вероятности и тем смелее выбирает
+            маловероятные токены. Четыре типа задач — техническая, творческая,
+            логическая и аналитическая — уходят к модели при t = 0
+            (детерминированно), 0.7 (баланс) и 1.2 (творчески): 12 вызовов,
+            чтобы сравнить точность, креативность и разнообразие.
+          </p>
+        </div>
+
+        <section id="tempQueryPanel" class="task-panel" hidden>
+          <div class="task-panel-head">
+            <h2 class="task-heading">Задание</h2>
+          </div>
+          <p id="tempQueryText" class="task-text"></p>
+        </section>
+
+        <div id="tempGrid" class="temp-results">
+          <!-- 4 секции (по типу задачи) × 3 карточки температур -->
+        </div>
+
+        <section id="analysisSection" class="judge analysis" hidden>
+          <header class="judge-head">
+            <h2 class="analysis-title">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2l2 6.2L20 10l-6 1.8L12 18l-2-6.2L4 10l6-1.8L12 2z"/></svg>
+              Выводы
+            </h2>
+            <button id="analysisPromptBtn" class="hint-btn prompt-btn" title="Промпт, отправленный аналитику">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </button>
+          </header>
+          <div class="judge-body" id="analysisBody"></div>
+        </section>
+      </div>
     </main>
   </div>
 

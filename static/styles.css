@@ -38,6 +38,111 @@ html, body {
   min-height: 100vh;
 }
 
+/* ===== Вкладки (День 3 / День 4) ===== */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+.tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  background: #1f6feb;
+  color: #fff;
+}
+
+/* ===== День 4: сетка трёх карточек температур ===== */
+.temp-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* ===== День 4: блок выводов анализа ===== */
+.judge.analysis {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  background:
+    linear-gradient(180deg, rgba(88, 166, 255, 0.07), rgba(88, 166, 255, 0) 55%),
+    var(--bg-card);
+}
+.judge.analysis::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #58a6ff, #bc8cff, #f778ba);
+}
+.analysis-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+.analysis-title svg { flex: none; }
+.analysis-content {
+  animation: analysisIn 0.45s ease both;
+}
+@keyframes analysisIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.analysis-content p { margin: 8px 0; line-height: 1.65; }
+.analysis-content .analysis-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.analysis-content .analysis-h::before {
+  content: "";
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #58a6ff, #bc8cff);
+  flex: none;
+}
+.analysis-content .analysis-h:first-child { margin-top: 2px; }
+.analysis-content ul,
+.analysis-content ol { margin: 8px 0; padding-left: 22px; }
+.analysis-content li { margin: 5px 0; line-height: 1.6; }
+.analysis-content ul li::marker,
+.analysis-content ol li::marker { color: var(--accent); }
+.analysis-content ol li::marker { font-weight: 600; }
+.analysis-content code {
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 13px;
+}
+.analysis-content strong { color: #fff; }
+.analysis-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
 /* ===== Сайдбар ===== */
 .sidebar {
   background: var(--bg-side);
@@ -248,6 +353,60 @@ html, body {
 .progress-list { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin-top: 12px; }
 .p-item { font-size: 13px; }
 .p-done { color: var(--green); }
+
+/* ===== День 4: панель четырёх заданий ===== */
+.temp-tasks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.temp-task { display: flex; flex-direction: column; gap: 6px; }
+.qp-row { margin: 6px 0; line-height: 1.55; }
+.qp-label {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 6px;
+}
+.qp-label::after { content: ":"; }
+
+/* ===== День 4: матрица прогресса 4×3 ===== */
+.tp-matrix {
+  display: grid;
+  grid-template-columns: 110px repeat(3, 64px);
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+}
+.tp-head { font-size: 12px; color: var(--text-dim); text-align: center; }
+.tp-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  padding-right: 6px;
+}
+.tp-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 13px;
+  justify-self: center;
+  border: 1px solid var(--border);
+  background: var(--bg-side);
+}
+
+/* ===== День 4: секции результатов по типам задач ===== */
+.temp-results { display: flex; flex-direction: column; gap: 26px; }
+.temp-task-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
 .p-run { color: var(--accent); }
 .p-wait { color: var(--text-dim); }
 
@@ -458,8 +617,66 @@ html, body {
   font-size: 14px;
 }
 
+/* ===== День 4: фаза «Формирую вывод» (все ответы собраны, работает аналитик) ===== */
+.analysis-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.analysis-pending-label {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  background: linear-gradient(90deg, #58a6ff, #bc8cff, #f778ba, #58a6ff);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: apShimmer 2s linear infinite;
+}
+@keyframes apShimmer {
+  from { background-position: 0% 0; }
+  to { background-position: 200% 0; }
+}
+.ap-dots { display: inline-flex; gap: 4px; }
+.ap-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: apPulse 1.2s ease-in-out infinite;
+}
+.ap-dots i:nth-child(2) { animation-delay: 0.2s; }
+.ap-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes apPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* Скелетон блока вывода на время работы аналитика */
+.analysis-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+.ap-bar {
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(88, 166, 255, 0.10) 25%, rgba(88, 166, 255, 0.28) 50%, rgba(88, 166, 255, 0.10) 75%);
+  background-size: 200% 100%;
+  animation: apBar 1.4s ease-in-out infinite;
+}
+@keyframes apBar {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
   .grid { grid-template-columns: 1fr; }
+  .temp-grid { grid-template-columns: 1fr; }
 }

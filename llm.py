@@ -35,6 +35,8 @@ def chat(
     temperature: float | None = None,
     max_tokens: int | None = None,
     model: str | None = None,
+    timeout: float | None = None,
+    thinking: bool | None = None,
 ) -> dict[str, Any]:
     """Один вызов chat.completions.create.
 
@@ -42,6 +44,9 @@ def chat(
     model=None → settings.openai_model; конкретное имя — переопределение модели.
     max_tokens=None → ограничение НЕ отправляется в API (без лимита);
     конкретное число — жёсткий лимит токенов ответа.
+    timeout=None → таймаут клиента (90 с); число — потолок на этот вызов.
+    thinking=None → как в settings.enable_thinking; False — выключить
+    reasoning-фазу GLM на уровне chat-шаблона (для коротких ответов).
 
     Возвращает dict:
       {
@@ -63,7 +68,12 @@ def chat(
         # max_tokens=None — ограничение не задаётся вовсе (используется
         # лимит модели/провайдера). Конкретное число — жёсткий лимит.
         kwargs["max_tokens"] = max_tokens
-    if not settings.enable_thinking:
+    if timeout is not None:
+        # Пер-запросный таймаут (открытая библиотека поддерживает его
+        # в create() поверх дефолта клиента).
+        kwargs["timeout"] = timeout
+    enable_thinking = settings.enable_thinking if thinking is None else thinking
+    if not enable_thinking:
         # Отключаем reasoning-фазу GLM на уровне chat-шаблона (vLLM/SGLang):
         # иначе мышление ест max_tokens, и content приходит пустым
         # (finish_reason="length" при исчерпанных completion_tokens).

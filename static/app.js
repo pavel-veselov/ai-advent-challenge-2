@@ -1,4 +1,4 @@
-/* День 3 — Разные способы рассуждения. Чистый JS, без фреймворков. */
+/* AI Advent — День 3 (способы рассуждения) и День 4 (температура). Чистый JS. */
 
 const METHODS_META = {
   direct: {
@@ -76,7 +76,7 @@ async function loadModels() {
     /* список недоступен — уйдём в fallback ниже */
   }
   if (!models || !models.length) {
-    models = ["glm-5.3-flash", "qwen3.8-27b", "deepseek-v4-flash"];
+    models = ["glm-5.3-flash", "deepseek-v4-flash"];
     def = models[models.length - 1];
   }
   sel.innerHTML = "";
@@ -601,6 +601,15 @@ function bindHints() {
     $("promptModal").hidden = false;
   });
 
+  // Промпт, отправленный аналитику температур (День 4).
+  $("analysisPromptBtn").addEventListener("click", () => {
+    $("promptTitle").textContent = "Промпт (анализ температур)";
+    $("promptText").textContent = tempState.analysisPrompt
+      ? tempState.analysisPrompt
+      : "(промпт аналитика появится после сравнения ответов)";
+    $("promptModal").hidden = false;
+  });
+
   function closeModal() {
     $("hintModal").hidden = true;
     $("promptModal").hidden = true;
@@ -619,6 +628,330 @@ function bindHints() {
 }
 
 // --------------------------------------------------------------------------
+// Вкладки (День 3 / День 4)
+// --------------------------------------------------------------------------
+const DAY_META = {
+  3: { title: "День 3", subtitle: "Разные способы рассуждения" },
+  4: { title: "День 4", subtitle: "Температура" },
+};
+
+function switchDay(day) {
+  $("pageDay3").hidden = day !== 3;
+  $("mainDay3").hidden = day !== 3;
+  $("pageDay4").hidden = day !== 4;
+  $("mainDay4").hidden = day !== 4;
+  $("tabDay3").classList.toggle("active", day === 3);
+  $("tabDay4").classList.toggle("active", day === 4);
+  $("pageTitle").textContent = DAY_META[day].title;
+  $("pageSubtitle").textContent = DAY_META[day].subtitle;
+}
+
+// --------------------------------------------------------------------------
+// День 4: матрица «4 типа задач × температура»
+// --------------------------------------------------------------------------
+const TEMP_TEMPS = [
+  { temperature: 0, label: "t = 0" },
+  { temperature: 0.7, label: "t = 0.7" },
+  { temperature: 1.2, label: "t = 1.2" },
+];
+
+const TEMP_TASK_META = [
+  { key: "technical", label: "Техническая", inputId: "tempQueryTechnical" },
+  { key: "creative", label: "Творческая", inputId: "tempQueryCreative" },
+  { key: "logical", label: "Логическая", inputId: "tempQueryLogical" },
+  { key: "analytical", label: "Аналитическая", inputId: "tempQueryAnalytical" },
+];
+
+const tempState = {
+  queries: {}, // {key: текст задания последнего запуска}
+  results: {}, // {technical: {"0.0": {...}, "0.7": {...}, "1.2": {...}}, ...}
+  analysis: null,
+  analysisPrompt: null, // промпт аналитика (для модала «</>»)
+};
+
+function showError4(msg) {
+  const box = $("tempErrorBox");
+  box.textContent = msg;
+  box.hidden = false;
+}
+function clearError4() {
+  $("tempErrorBox").hidden = true;
+  $("tempErrorBox").textContent = "";
+}
+
+// Панель текущих заданий в основной области: четыре типа одной строкой.
+function renderTempQueryPanel() {
+  const panel = $("tempQueryPanel");
+  if (!Object.keys(tempState.queries).length) {
+    panel.hidden = true;
+    return;
+  }
+  $("tempQueryText").innerHTML = TEMP_TASK_META.map(
+    (task) =>
+      `<div class="qp-row"><span class="qp-label">${esc(task.label)}</span>${esc(tempState.queries[task.key] || "")}</div>`
+  ).join("");
+  panel.hidden = false;
+}
+
+function renderTempEmpty(msg) {
+  $("tempGrid").innerHTML = `<div class="empty-state">${msg}</div>`;
+}
+
+// Прогресс матрицы: сервер гоняет 12 вызовов параллельно, фронт опрашивает
+// /api/temperature-progress, пока идёт основной запрос (как /api/progress
+// в Дне 3). Сетка «4 задачи × 3 температуры»: ✓ — ответ получен,
+// ● — выполняется, ○ — ещё не стартовал. Идентификатор ячейки на сервере —
+// «<тип>:<температура>», температура в строке — toFixed(1) ("0.0", "0.7").
+// Когда все 12 ответов собраны, сервер ещё формирует вывод аналитика —
+// показываем фазу «Формирую вывод» со скелетоном в блоке анализа.
+// Подпись-сигнатура: перерисовываем только при изменении статусов, иначе
+// CSS-анимации фазы ожидания перезапускались бы на каждом тике опроса.
+let lastTempProgressSig = null;
+
+function renderTempProgress(done, running) {
+  const doneArr = done || [];
+  const sig = `${doneArr.join(",")}|${(running || []).join(",")}`;
+  if (sig === lastTempProgressSig) return;
+  lastTempProgressSig = sig;
+  const doneSet = new Set(doneArr);
+  const runSet = new Set(running || []);
+  const total = TEMP_TEMPS.length * TEMP_TASK_META.length;
+  const allDone = total > 0 && doneArr.length >= total;
+  const head = `<span></span>${TEMP_TEMPS.map(
+    (t) => `<span class="tp-head">${esc(t.label)}</span>`
+  ).join("")}`;
+  const rows = TEMP_TASK_META.map((task) => {
+    const cells = TEMP_TEMPS.map(({ temperature }) => {
+      const cell = `${task.key}:${temperature.toFixed(1)}`;
+      const isDone = doneSet.has(cell);
+      const isRun = runSet.has(cell);
+      const cls = isDone ? "p-done" : isRun ? "p-run" : "p-wait";
+      const mark = isDone ? "✓" : isRun ? "●" : "○";
+      return `<span class="tp-cell ${cls}">${mark}</span>`;
+    }).join("");
+    return `<span class="tp-row-label">${esc(task.label)}</span>${cells}`;
+  }).join("");
+  const header = allDone
+    ? `Все 12 ответов получены.<div class="analysis-pending"><span class="analysis-pending-label">Формирую вывод</span><span class="ap-dots"><i></i><i></i><i></i></span></div>`
+    : `Идёт эксперимент: 4 задачи × 3 температуры = 12 параллельных вызовов...`;
+  renderTempEmpty(`${header}<div class="tp-matrix">${head}${rows}</div>`);
+  if (allDone && $("analysisSection").hidden) renderTempAnalysisSkeleton();
+}
+
+// Скелетон блока вывода: виден, пока аналитик работает; renderTempAnalysis
+// перезапишет его готовым Markdown-контентом.
+function renderTempAnalysisSkeleton() {
+  $("analysisSection").hidden = false;
+  $("analysisBody").innerHTML =
+    '<div class="analysis-skeleton">' +
+    '<div class="ap-bar" style="width:38%"></div>' +
+    '<div class="ap-bar" style="width:92%"></div>' +
+    '<div class="ap-bar" style="width:84%"></div>' +
+    '<div class="ap-bar" style="width:62%"></div>' +
+    "</div>";
+}
+
+function renderTempResults() {
+  const grid = $("tempGrid");
+  grid.innerHTML = "";
+  if (!Object.keys(tempState.results).length) {
+    renderTempEmpty("Ответы не получены.");
+    return;
+  }
+  TEMP_TASK_META.forEach((task) => {
+    const answers = tempState.results[task.key] || {};
+    const cards = TEMP_TEMPS.map(({ temperature, label }) => {
+      // Ключи групп — строки из JSON: "0.0" / "0.7" / "1.2". String(0)
+      // дал бы "0" и промахнулся мимо "0.0" (t=0 показывал «(пусто)»),
+      // поэтому canonical toFixed(1) — как в идентификаторах прогресса.
+      const r = answers[temperature.toFixed(1)] || {};
+      return `
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title"><span>${esc(label)}</span></div>
+          </div>
+          <div class="card-detail">${esc(r.content || "(пусто)")}</div>
+          <div class="card-footer">
+            <span>finish: ${esc(r.finish_reason || "—")}</span>
+            <span>токены: ${r.completion_tokens ?? "—"}</span>
+            <span>время: ${r.elapsed_ms != null ? r.elapsed_ms + " мс" : "—"}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+    const section = document.createElement("section");
+    section.className = "temp-task-results";
+    section.innerHTML = `
+      <h3 class="temp-task-title">${esc(task.label)} задача</h3>
+      <div class="grid temp-grid">${cards}</div>
+    `;
+    grid.appendChild(section);
+  });
+}
+
+async function runTemperatureExperiment() {
+  clearError4();
+  const queries = {};
+  for (const { key, inputId } of TEMP_TASK_META) {
+    queries[key] = $(inputId).value.trim();
+  }
+  if (Object.values(queries).some((q) => !q)) {
+    showError4("Заполните все четыре задания.");
+    return;
+  }
+  tempState.queries = queries;
+  tempState.results = {};
+  tempState.analysis = null;
+  tempState.analysisPrompt = null;
+  $("analysisSection").hidden = true;
+  renderTempQueryPanel();
+  lastTempProgressSig = null;
+  renderTempProgress([], []);
+  const btn = $("tempRunBtn");
+  btn.disabled = true;
+  btn.classList.add("loading");
+  // Прогресс по ячейкам матрицы: сервер выполняет 12 вызовов параллельно,
+  // фронт опрашивает /api/temperature-progress, пока идёт основной запрос.
+  // Опрос гасится, как только /api/temp-matrix вернул ответ: дальше уже
+  // выведены карточки с готовым выводом аналитика.
+  let stopPolling = false;
+  const pollTimer = setInterval(async () => {
+    if (stopPolling) return;
+    try {
+      const pr = await fetch("/api/temperature-progress");
+      if (stopPolling) return;
+      if (pr.ok) {
+        const pj = await pr.json();
+        if (!stopPolling) {
+          renderTempProgress(pj.done || [], pj.running || []);
+        }
+      }
+    } catch {
+      /* индикатор прогресса не критичен */
+    }
+  }, 800);
+  try {
+    const res = await fetch("/api/temp-matrix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        queries,
+        model: getSelectedModel(),
+      }),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const data = await res.json();
+    // Все 12 вызовов и вывод аналитика готовы: гасим опрос прогресса.
+    stopPolling = true;
+    clearInterval(pollTimer);
+    tempState.results = data.results || {};
+    tempState.analysis = data.analysis || "";
+    setTempAnalysisPrompt(data.prompt || null);
+    renderTempResults();
+    renderTempQueryPanel();
+    renderTempAnalysis();
+  } catch (err) {
+    showError4(`Не удалось выполнить эксперимент: ${err.message}`);
+    renderTempEmpty("Эксперимент не выполнен.");
+    $("analysisSection").hidden = true;
+    $("tempQueryPanel").hidden = true;
+  } finally {
+    stopPolling = true;
+    if (pollTimer) clearInterval(pollTimer);
+    btn.disabled = false;
+    btn.classList.remove("loading");
+  }
+}
+
+// Мини-рендер Markdown для выводов анализа: заголовки (#..####), списки
+// (- / 1)), полностью жирные строки-подзаголовки, ---, инлайн **bold**,
+// *italic*, `code`. Вход экранируется esc() до разметки, поэтому HTML из
+// ответа модели отобразится как текст, а не выполнится.
+function mdInline(s) {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+function renderAnalysisMarkdown(text) {
+  const out = [];
+  let list = null; // "ul" | "ol" | null
+  const closeList = () => {
+    if (list) {
+      out.push(`</${list}>`);
+      list = null;
+    }
+  };
+  for (const rawLine of esc(text || "").split("\n")) {
+    const line = rawLine.trim();
+    if (!line || /^```/.test(line)) {
+      closeList();
+      continue;
+    }
+    if (/^---+$/.test(line)) {
+      closeList();
+      out.push("<hr>");
+      continue;
+    }
+    let m = line.match(/^#{1,4}\s+(.+)$/);
+    if (m) {
+      closeList();
+      out.push(`<h3 class="analysis-h">${mdInline(m[1])}</h3>`);
+      continue;
+    }
+    // Строка целиком в **...** — подзаголовок раздела.
+    m = line.match(/^\*\*(.+?)\*\*\s*[:.]?$/);
+    if (m) {
+      closeList();
+      out.push(`<h3 class="analysis-h">${mdInline(m[1])}</h3>`);
+      continue;
+    }
+    if (/^[-*•]\s+/.test(line)) {
+      if (list !== "ul") {
+        closeList();
+        out.push("<ul>");
+        list = "ul";
+      }
+      out.push(`<li>${mdInline(line.replace(/^[-*•]\s+/, ""))}</li>`);
+      continue;
+    }
+    m = line.match(/^\d+[.)]\s+(.+)$/);
+    if (m) {
+      const rest = m[1];
+      // «1) **Точность**» — заголовок из промпта, обычные «1) текст» — ol.
+      const bold = rest.match(/^\*\*(.+?)\*\*\s*[:.]?$/);
+      if (bold) {
+        closeList();
+        out.push(`<h3 class="analysis-h">${mdInline(bold[1])}</h3>`);
+      } else {
+        if (list !== "ol") {
+          closeList();
+          out.push("<ol>");
+          list = "ol";
+        }
+        out.push(`<li>${mdInline(rest)}</li>`);
+      }
+      continue;
+    }
+    closeList();
+    out.push(`<p>${mdInline(line)}</p>`);
+  }
+  closeList();
+  return out.join("");
+}
+
+function renderTempAnalysis() {
+  $("analysisSection").hidden = false;
+  $("analysisBody").innerHTML = `<div class="analysis-content">${renderAnalysisMarkdown(tempState.analysis || "")}</div>`;
+}
+
+// Промпт аналитика для модала «</>» (обновляется после каждого анализа).
+function setTempAnalysisPrompt(prompt) {
+  tempState.analysisPrompt = prompt;
+}
+
+// --------------------------------------------------------------------------
 // Инициализация
 // --------------------------------------------------------------------------
 function init() {
@@ -630,8 +963,14 @@ function init() {
   });
   $("taskSelect").addEventListener("change", handleTaskChange);
   $("solveBtn").addEventListener("click", solveAll);
+  // Вкладки.
+  $("tabDay3").addEventListener("click", () => switchDay(3));
+  $("tabDay4").addEventListener("click", () => switchDay(4));
+  // День 4.
+  $("tempRunBtn").addEventListener("click", runTemperatureExperiment);
   bindHints();
   clearResults();
+  renderTempEmpty("Нажмите «Выполнить» — 4 задачи поедут к модели при t = 0, 0.7 и 1.2.");
   loadTasks();
   loadModels();
 }
