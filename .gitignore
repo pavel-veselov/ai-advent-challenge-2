@@ -1,0 +1,18 @@
+# Секреты и локальная конфигурация
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Окружение инструментов
+.omo/
+
+# Логи
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
