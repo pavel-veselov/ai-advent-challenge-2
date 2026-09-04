@@ -67,8 +67,9 @@ html, body {
   color: #fff;
 }
 
-/* ===== День 4: сетка трёх карточек температур ===== */
-.temp-grid {
+/* ===== День 4/5: сетка трёх карточек (температуры, модели бенчмарка).
+     Два класса .grid.temp-grid — чтобы перебить базовый .grid (2 колонки). ===== */
+.grid.temp-grid {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
@@ -142,6 +143,29 @@ html, body {
   border-top: 1px solid var(--border);
   margin: 14px 0;
 }
+/* Markdown-таблицы в анализе (Дни 4 и 5) */
+.analysis-content .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12.5px;
+}
+.analysis-content .md-table th,
+.analysis-content .md-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.analysis-content .md-table thead th {
+  background: var(--bg-side);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.analysis-content .md-table tbody th { font-weight: 600; }
 
 /* ===== Сайдбар ===== */
 .sidebar {
@@ -674,9 +698,303 @@ html, body {
   to { background-position: -200% 0; }
 }
 
+/* День 5: бейджи уровня модели на карточках бенчмарка */
+.tier-badge {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-side, transparent);
+  white-space: nowrap;
+}
+.tier-weak { color: #8b949e; border-color: rgba(139, 148, 158, 0.45); }
+.tier-medium { color: #58a6ff; border-color: rgba(88, 166, 255, 0.45); }
+.tier-strong { color: #3fb950; border-color: rgba(63, 185, 80, 0.45); }
+
+/* ===== День 5: переработанный интерфейс бенчмарка моделей ===== */
+
+/* Сайдбар: подсказка и нумерованные этапы */
+.bench-hint {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.bench-stage-field {
+  display: flex;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.bench-stage-field:first-child { border-top: none; padding-top: 2px; }
+.bench-stage-num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+  background: rgba(88, 166, 255, 0.08);
+}
+.bench-stage-body { flex: 1; min-width: 0; }
+.bench-stage-body .field-label { margin-bottom: 6px; }
+#pageDay5 .actions .btn { width: 100%; }
+
+/* Прогресс: карточка с матрицей «этапы × модели» */
+.bench-progress-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px 14px;
+}
+.bench-progress-head {
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.bench-legend {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.bench-legend .bench-cell { width: 18px; height: 16px; font-size: 10px; font-style: normal; }
+.bench-matrix {
+  display: grid;
+  grid-template-columns: 118px repeat(3, 76px);
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.bench-matrix-corner { display: inline-block; }
+.bench-matrix-head {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.bench-matrix-head.tier-weak { color: #8b949e; }
+.bench-matrix-head.tier-medium { color: #58a6ff; }
+.bench-matrix-head.tier-strong { color: #3fb950; }
+.bench-row-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bench-row-state {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.bench-state-done { color: var(--green); }
+.bench-state-running { color: var(--accent); }
+.bench-state-waiting { color: var(--text-dim); }
+.bench-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 34px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--bg-side);
+}
+.bench-done { color: var(--green); border-color: rgba(63, 185, 80, 0.4); }
+.bench-run {
+  color: var(--accent);
+  border-color: rgba(88, 166, 255, 0.4);
+  animation: benchPulse 1.2s ease-in-out infinite;
+}
+.bench-wait { color: var(--text-dim); opacity: 0.7; }
+@keyframes benchPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88, 166, 255, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.15); }
+}
+
+/* Карточки результатов: выравнивание и метрики-чипы */
+.bench-card { display: flex; flex-direction: column; }
+.bench-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.bench-model {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bench-finish {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.bench-finish.is-ok { color: var(--green); border-color: rgba(63, 185, 80, 0.4); }
+.bench-finish.is-warn { color: var(--amber); border-color: rgba(210, 153, 34, 0.45); }
+.bench-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.bench-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.bench-chip b { color: var(--text); font-weight: 600; }
+.bench-stage-reveal { animation: benchFadeIn 0.45s ease both; }
+@keyframes benchFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.bench-empty svg { display: block; margin: 0 auto 8px; color: var(--text-dim); }
+
+/* Сводная таблица «модель × этап» */
+.bench-summary {
+  margin-top: 26px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.bench-summary-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.bench-table-wrap { overflow-x: auto; }
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bench-table th,
+.bench-table td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.bench-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  background: var(--bg-side);
+}
+.bench-table tbody th { font-weight: 600; }
+.bench-table td small {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-left: 4px;
+}
+.bench-table td.is-best { color: var(--green); font-weight: 600; }
+.bench-table td.bench-total { font-weight: 600; }
+.bench-table td.bench-total small { font-weight: 400; }
+.bench-summary-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* «Итоговое сравнение»: отчёт аналитика разбит на отдельные карточки-блоки
+   (по разделу на блок) в стиле «Сводки по метрикам» */
+.bench-report { margin-top: 26px; }
+.bench-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bench-report-head .bench-summary-title { margin: 0; }
+.bench-report-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.bench-report-body { margin-top: 14px; }
+.bench-report-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.report-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.report-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.report-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+  background: rgba(88, 166, 255, 0.08);
+}
+.report-content { font-size: 13.5px; }
+.report-content .analysis-content { animation: none; }
+.report-content .analysis-content .analysis-h { font-size: 13.5px; margin: 12px 0 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bench-run { animation: none; }
+  .bench-stage-reveal { animation: none; }
+}
+
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
   .grid { grid-template-columns: 1fr; }
-  .temp-grid { grid-template-columns: 1fr; }
+  .grid.temp-grid { grid-template-columns: 1fr; }
+  .bench-matrix { grid-template-columns: 96px repeat(3, 60px); }
+  .bench-summary { padding: 14px; }
 }

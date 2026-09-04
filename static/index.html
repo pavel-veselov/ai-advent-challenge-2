@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Advent — День 3 и День 4</title>
+  <title>AI Advent — День 3, 4 и 5</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,6 +13,7 @@
       <nav class="tabs" aria-label="Дни">
         <button id="tabDay3" class="tab active" type="button">День 3</button>
         <button id="tabDay4" class="tab" type="button">День 4</button>
+        <button id="tabDay5" class="tab" type="button">День 5</button>
       </nav>
 
       <h1 class="title" id="pageTitle">День 3</h1>
@@ -88,6 +89,46 @@
 
         <div id="tempErrorBox" class="error-box" hidden></div>
       </div>
+
+      <!-- ===== Вкладка День 5 ===== -->
+      <div id="pageDay5" hidden>
+        <p class="bench-hint">
+          Три задачи возрастающей сложности уходят трём моделям gpustack —
+          слабой, средней и сильной. 3 этапа × 3 модели = 9 вызовов,
+          этапы выполняются по очереди.
+        </p>
+        <section class="panel">
+          <div class="bench-stage-field">
+            <span class="bench-stage-num" aria-hidden="true">01</span>
+            <div class="bench-stage-body">
+              <label class="field-label" for="benchQuerySimple">Простая задача</label>
+              <textarea id="benchQuerySimple" class="textarea" rows="3">Одним абзацем объясни, зачем в коде нужны тесты.</textarea>
+            </div>
+          </div>
+
+          <div class="bench-stage-field">
+            <span class="bench-stage-num" aria-hidden="true">02</span>
+            <div class="bench-stage-body">
+              <label class="field-label" for="benchQueryMedium">Средняя задача</label>
+              <textarea id="benchQueryMedium" class="textarea" rows="4">Напиши на Python функцию is_balanced(s), которая проверяет, сбалансированы ли в строке скобки трёх видов — (), [] и {}. Кратко поясни подход и приведи 3–4 примера вызова с результатом.</textarea>
+            </div>
+          </div>
+
+          <div class="bench-stage-field">
+            <span class="bench-stage-num" aria-hidden="true">03</span>
+            <div class="bench-stage-body">
+              <label class="field-label" for="benchQueryHard">Сложная задача</label>
+              <textarea id="benchQueryHard" class="textarea" rows="5">Команда из трёх разработчиков спорит, что выбрать для нового сервиса с непредсказуемой нагрузкой: монолит или микросервисы. Разбери обе стороны: сильные стороны, риски и скрытые издержки каждого варианта для команды такого размера. Прими решение, обоснуй его и укажи, при каких обстоятельствах его стоит пересмотреть. Ответ структурируй.</textarea>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <button id="benchRunBtn" class="btn primary">Запустить бенчмарк</button>
+        </div>
+
+        <div id="benchErrorBox" class="error-box" hidden></div>
+      </div>
     </aside>
 
     <!-- ===== Основная область ===== -->
@@ -160,6 +201,44 @@
             </button>
           </header>
           <div class="judge-body" id="analysisBody"></div>
+        </section>
+      </div>
+
+      <!-- ===== Основная область Дня 5 ===== -->
+      <div id="mainDay5" hidden>
+        <div class="intro">
+          <p>
+            Модель — не абстракция, а конкретная точка на кривой «качество /
+            скорость / цена». Бенчмарк идёт поэтапно: три задачи возрастающей
+            сложности, каждая уходит трём моделям gpustack — слабой, средней
+            и сильной. Этапы выполняются по очереди, и картина наполняется
+            шаг за шагом; замеряем время, токены и стоимость, а в конце
+            аналитик собирает итоговое сравнение.
+          </p>
+        </div>
+
+        <div id="benchProgress" hidden>
+          <!-- прогресс-матрица «этапы × модели» -->
+        </div>
+
+        <div id="benchResults" class="temp-results">
+          <!-- результаты по этапам, появляются по мере прохождения -->
+        </div>
+
+        <!-- Клиентская сводная таблица «модель × этап»: время и токены.
+             Появляется, как только собраны все 9 ответов, — до прихода анализа. -->
+        <section id="benchSummary" class="bench-summary" hidden></section>
+
+        <!-- Итоговое сравнение: заголовок + отдельные карточки-блоки по разделам -->
+        <section id="benchAnalysisSection" class="bench-report" hidden>
+          <div class="bench-report-head">
+            <h3 class="bench-summary-title">Итоговое сравнение</h3>
+            <button id="benchAnalysisPromptBtn" class="hint-btn prompt-btn" title="Промпт, отправленный аналитику">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </button>
+          </div>
+          <p class="bench-report-sub">Выводы сильной модели по девяти ответам — качество, скорость, ресурсоёмкость.</p>
+          <div class="bench-report-body" id="benchAnalysisBody"></div>
         </section>
       </div>
     </main>

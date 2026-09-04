@@ -1,4 +1,4 @@
-﻿"""FastAPI-приложение «AI Advent — День 3 и День 4».
+﻿"""FastAPI-приложение «AI Advent — День 3, День 4 и День 5».
 
 Эндпоинты:
   GET  /                      → static/index.html
@@ -10,6 +10,11 @@
   GET  /api/temperature-progress → прогресс матрицы 4×3 вызовов (День 4)
   POST /api/temp-matrix          → 4 типа задач при t=0/0.7/1.2 параллельно
                                    + LLM-вывод по эксперименту (День 4)
+  GET  /api/models-progress   → прогресс бенчмарка моделей по этапам
+                                + частичные результаты (День 5)
+  POST /api/models-bench      → поэтапный бенчмарк: 3 задачи возрастающей
+                                сложности на слабой/средней/сильной модели
+                                + итоговое сравнение аналитиком (День 5)
 """
 from __future__ import annotations
 
@@ -39,8 +44,33 @@ app = FastAPI(title="AI Advent — День 3 и День 4")
 ALL_METHODS = ["direct", "step_by_step", "self_prompt", "experts"]
 
 # Модели, доступные в селекте фронтенда (белый список для solve/judge).
-# qwen3.8-27b временно исключена: нестабильно отвечает на бэкенде.
+# qwen3.8-27b нестабильна на длинных задачах Дня 3, поэтому в селекте её нет;
+# в бенчмарке Дня 5 она участвует как «слабая» — краткий запрос ей по силам.
 AVAILABLE_MODELS = ["glm-5.3-flash", "deepseek-v4-flash"]
+
+# День 5: три уровня силы из gpustack. Слабая — qwen3.8-27b (27B),
+# средняя — deepseek-v4-flash, сильная — glm-5.3-flash (дефолт шлюза).
+MODEL_BENCH_TIERS: list[dict] = [
+    {"tier": "weak", "label": "Слабая", "model": "qwen3.8-27b"},
+    {"tier": "medium", "label": "Средняя", "model": "deepseek-v4-flash"},
+    {"tier": "strong", "label": "Сильная", "model": "glm-5.3-flash"},
+]
+
+# Референсная стоимость моделей (USD за 1 млн токенов, вход/вывод).
+# Цены — официальные API-прайсы поставщиков, сентябрь 2026:
+#   deepseek-v4-flash: https://api-docs.deepseek.com/quick_start/pricing
+#     (вход $0.14, вывод $0.28, кэш-хит $0.028);
+#   glm-5.3-flash: https://docs.z.ai/guides/overview/pricing
+#     (прайс $0.15/$0.50; до 09.09.2026 действует промо 50% → $0.075/$0.25);
+#   qwen3.8-27b: публичного прайса нет (веса открыты), берём ближайший
+#     официальный тир qwen3-30b-a3b —
+#     https://www.alibabacloud.com/help/en/model-studio/qwen3-30b-a3b
+#     ($0.108 вход / $0.431 вывод, регион Китай).
+MODEL_PRICING: dict[str, dict[str, float]] = {
+    "qwen3.8-27b": {"input": 0.108, "output": 0.431},
+    "deepseek-v4-flash": {"input": 0.14, "output": 0.28},
+    "glm-5.3-flash": {"input": 0.15, "output": 0.5},
+}
 
 # Температуры эксперимента Дня 4: матрица «тип задачи × температура».
 TEMPERATURES = [0.0, 0.7, 1.2]
@@ -57,6 +87,17 @@ TEMP_PROGRESS: dict = {
     "running": [],
     "done": [],
     "total": len(T.TEMP_TASKS) * len(TEMPERATURES),
+}
+# Прогресс последнего запуска /api/models-bench (День 5): поэтапный
+# бенчмарк — этапы по очереди, внутри этапа три модели параллельно.
+# Идентификатор ячейки — «<этап>:<уровень>» ("simple:weak", ...);
+# "results" накапливает завершённые этапы, чтобы фронтенд по
+# /api/models-progress рисовал картину пошагово, до финального ответа.
+BENCH_PROGRESS: dict = {
+    "running": [],
+    "done": [],
+    "total": len(T.BENCH_STAGES) * len(MODEL_BENCH_TIERS),
+    "results": {},
 }
 # Защита от потерянных обновлений при одновременном завершении способов.
 PROGRESS_LOCK = threading.Lock()
@@ -91,6 +132,10 @@ class JudgeReq(BaseModel):
 class TempMatrixReq(BaseModel):
     queries: dict[str, str] = {}  # {"technical": "...", ...} — пустые значения заменяются дефолтными из T.TEMP_TASKS
     model: str | None = None
+
+
+class BenchReq(BaseModel):
+    queries: dict[str, str] = {}  # {"simple": "...", ...} — пустые значения заменяются дефолтными из T.BENCH_STAGES
 
 
 # --------------------------------------------------------------------------
@@ -618,6 +663,143 @@ def api_temp_matrix(req: TempMatrixReq):
 
     analysis, prompt = run_temp_matrix_analyze(queries, results, model)
     return {"results": results, "analysis": analysis, "prompt": prompt}
+
+
+# --------------------------------------------------------------------------
+# День 5: версии моделей
+# --------------------------------------------------------------------------
+def run_bench_analyze(queries: dict[str, str], results: dict, analyst_model: str | None = None):
+    """Итоговое сравнение трёх моделей аналитиком (t=0, сильная модель).
+
+    Возвращает (analysis, prompt) — как run_temp_matrix_analyze.
+    """
+    blocks = []
+    # Сводные замеры: суммарные время, токены и стоимость вывода по каждой модели.
+    totals: dict[str, dict] = {t["tier"]: {"ms": 0, "tokens": 0, "cost": 0.0} for t in MODEL_BENCH_TIERS}
+    for stage in T.BENCH_STAGES:
+        key = stage["key"]
+        stage_results = results[key]
+        lines = [f"Этап: {stage['label']} задача. Запрос: {queries[key]}"]
+        for tier in MODEL_BENCH_TIERS:
+            r = stage_results[tier["tier"]]
+            totals[tier["tier"]]["ms"] += r["elapsed_ms"]
+            totals[tier["tier"]]["tokens"] += r["completion_tokens"]
+            out_price = MODEL_PRICING.get(tier["model"], {}).get("output")
+            if out_price:
+                totals[tier["tier"]]["cost"] += r["completion_tokens"] / 1e6 * out_price
+            lines.append(
+                f"--- {tier['label']} модель: {r['model']} ---\n"
+                f"[время: {r['elapsed_ms'] / 1000:.1f} с, "
+                f"токенов: {r['completion_tokens']}, finish: {r['finish_reason']}]\n"
+                f"{r['content']}"
+            )
+        blocks.append("\n".join(lines))
+    summary = "; ".join(
+        f"{t['label']} ({t['model']}): суммарно {totals[t['tier']]['ms'] / 1000:.1f} с, "
+        f"{totals[t['tier']]['tokens']} токенов, в среднем "
+        f"{totals[t['tier']]['ms'] / 1000 / len(T.BENCH_STAGES):.1f} с на этап, "
+        f"стоимость вывода ≈${totals[t['tier']]['cost']:.4f}"
+        for t in MODEL_BENCH_TIERS
+    )
+    price_lines = "; ".join(
+        f"{t['model']} — ${MODEL_PRICING[t['model']]['input']}/${MODEL_PRICING[t['model']]['output']}"
+        for t in MODEL_BENCH_TIERS if t["model"] in MODEL_PRICING
+    )
+    messages = [
+        {"role": "system", "content": T.MODEL_BENCH_ANALYZE_SYSTEM},
+        {
+            "role": "user",
+            "content": "Поэтапный бенчмарк: три модели отвечали на одни и те же "
+                       "задачи возрастающей сложности.\n\n"
+                       "Сводные замеры по всем этапам: " + summary + "\n\n"
+                       "Референсные цены API (USD за 1 млн токенов, вход/вывод): "
+                       + price_lines +
+                       ". Стоимость в сводке = токены вывода × цена вывода.\n\n"
+                       "Ответы моделей с замерами по этапам:\n" + "\n\n".join(blocks),
+        },
+    ]
+    # t=0 и без лимита токенов — как у остальных аналитиков.
+    analysis = run_chat(messages, JUDGE_TEMPERATURE, None, analyst_model)
+    return analysis["content"], format_messages(messages)
+
+
+@app.get("/api/models-progress")
+def api_models_progress():
+    """Прогресс бенчмарка Дня 5: статусы ячеек «этап:уровень» + частичные результаты."""
+    with PROGRESS_LOCK:
+        return {
+            "done": list(BENCH_PROGRESS["done"]),
+            "running": list(BENCH_PROGRESS["running"]),
+            "total": BENCH_PROGRESS["total"],
+            # Завершённые этапы с ответами: фронтенд рисует картину пошагово.
+            "results": {k: dict(v) for k, v in BENCH_PROGRESS["results"].items()},
+        }
+
+
+@app.post("/api/models-bench")
+def api_models_bench(req: BenchReq):
+    """День 5: поэтапный бенчмарк трёх моделей.
+
+    Этапы возрастающей сложности выполняются по очереди, внутри этапа три
+    модели (слабая/средняя/сильная) отвечают параллельно
+    (ThreadPoolExecutor): время этапа = самый медленный вызов. Системный
+    промпт и температура одинаковы для всех — сравнение уровней честное.
+    Замеры по каждой ячейке: время, токены, finish_reason; стоимость — из
+    MODEL_PRICING (внутренний шлюз бесплатен). Когда все этапы собраны,
+    аналитик (t=0, сильная модель) строит итоговую сравнительную картину:
+    качество по этапам, скорость, ресурсоёмкость.
+    """
+    queries = {}
+    for stage in T.BENCH_STAGES:
+        queries[stage["key"]] = (req.queries or {}).get(stage["key"], "").strip() or stage["query"]
+
+    with PROGRESS_LOCK:
+        BENCH_PROGRESS["done"] = []
+        BENCH_PROGRESS["running"] = []
+        BENCH_PROGRESS["total"] = len(T.BENCH_STAGES) * len(MODEL_BENCH_TIERS)
+        BENCH_PROGRESS["results"] = {}
+
+    def _run_cell(stage_key: str, query: str, tier: dict) -> dict:
+        """Одна ячейка «этап × модель» в отдельном потоке."""
+        key = f"{stage_key}:{tier['tier']}"
+        with PROGRESS_LOCK:
+            BENCH_PROGRESS["running"] = list(BENCH_PROGRESS["running"]) + [key]
+        messages = [
+            {"role": "system", "content": T.BENCH_SYSTEM},
+            {"role": "user", "content": query},
+        ]
+        res = run_chat(messages, JUDGE_TEMPERATURE, TEMP_CELL_MAX_TOKENS,
+                       tier["model"], timeout=TEMP_CELL_TIMEOUT)
+        with PROGRESS_LOCK:
+            BENCH_PROGRESS["running"] = [x for x in BENCH_PROGRESS["running"] if x != key]
+            BENCH_PROGRESS["done"] = list(BENCH_PROGRESS["done"]) + [key]
+        return {
+            "model": tier["model"],
+            "label": tier["label"],
+            "content": res["content"],
+            "finish_reason": res["finish_reason"],
+            "completion_tokens": res["completion_tokens"],
+            "elapsed_ms": res["elapsed_ms"],
+            "price_per_million": MODEL_PRICING.get(tier["model"]),
+        }
+
+    results: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=len(MODEL_BENCH_TIERS)) as pool:
+        for stage in T.BENCH_STAGES:
+            stage_key = stage["key"]
+            futures = {
+                t["tier"]: pool.submit(_run_cell, stage_key, queries[stage_key], t)
+                for t in MODEL_BENCH_TIERS
+            }
+            stage_results = {t["tier"]: futures[t["tier"]].result() for t in MODEL_BENCH_TIERS}
+            results[stage_key] = stage_results
+            # Этап завершён — отдаём его в прогрессе, чтобы фронтенд
+            # показывал картину пошагово, не дожидаясь конца бенчмарка.
+            with PROGRESS_LOCK:
+                BENCH_PROGRESS["results"][stage_key] = stage_results
+
+    analysis, prompt = run_bench_analyze(queries, results)
+    return {"results": results, "analysis": analysis, "prompt": prompt, "queries": queries}
 
 
 # Монтируем статику: всё, что не попавшее в роуты, из static/.
